@@ -42,6 +42,7 @@ class ImageListWidget(ttk.Frame):
         self._tree.tag_configure("ok", foreground="#00bc8c")
         self._tree.tag_configure("nogps", foreground="#e74c3c")
         self._tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        self._tree.bind("<Delete>", lambda _: self._remove_selected())
 
         # Rechtsklick-Kontextmenü
         self._ctx_menu = tk.Menu(self._tree, tearoff=False)

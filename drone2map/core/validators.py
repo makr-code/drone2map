@@ -56,7 +56,10 @@ class ImageValidator:
 
     def validate_folder(self, folder: str | Path) -> list[ValidationResult]:
         folder = Path(folder)
-        files = sorted([f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS])
+        files = sorted([
+            f for f in folder.iterdir()
+            if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS
+        ])
         return self.validate_batch(files)
 
     @staticmethod

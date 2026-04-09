@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Optional
 from ...core.exif_parser import ImageMetadata
+from ..styles import MAP_TILE_SERVERS
 
 logger = logging.getLogger(__name__)
 
@@ -19,16 +20,35 @@ class MapViewWidget(ttk.Frame):
         self._build()
 
     def _build(self) -> None:
+        # Toolbar: Tile-Server-Auswahl
+        toolbar = ttk.Frame(self)
+        toolbar.pack(side="top", fill="x")
+        ttk.Label(toolbar, text="Kartenlayer:").pack(side="left", padx=(4, 2))
+        self._tile_var = tk.StringVar(value=list(MAP_TILE_SERVERS)[0])
+        cb = ttk.Combobox(toolbar, textvariable=self._tile_var,
+                          values=list(MAP_TILE_SERVERS.keys()),
+                          state="readonly", width=14)
+        cb.pack(side="left", padx=(0, 4))
+        cb.bind("<<ComboboxSelected>>", self._on_tile_server_change)
+
         try:
             import tkintermapview  # type: ignore
             self._map_widget = tkintermapview.TkinterMapView(self, width=600, height=400, corner_radius=0)
             self._map_widget.pack(fill="both", expand=True)
-            self._map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
+            self._map_widget.set_tile_server(MAP_TILE_SERVERS[self._tile_var.get()])
         except ImportError:
             lbl = ttk.Label(self, text="tkintermapview nicht installiert.\nKarte nicht verfügbar.",
                             justify="center", anchor="center")
             lbl.pack(fill="both", expand=True)
             logger.warning("tkintermapview nicht verfügbar")
+
+    def _on_tile_server_change(self, _event=None) -> None:
+        """Wechselt den Karten-Tile-Server."""
+        if self._map_widget is None:
+            return
+        url = MAP_TILE_SERVERS.get(self._tile_var.get())
+        if url:
+            self._map_widget.set_tile_server(url)
 
     def set_images(self, images: list[ImageMetadata]) -> None:
         """Platziert Marker für alle Bilder mit GPS-Daten."""

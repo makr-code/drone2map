@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import queue
+import shutil
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -145,7 +146,7 @@ class Pipeline:
             else:
                 logger.info("NodeODM nicht erreichbar – verwende ODM-CLI")
                 self._prog(10.0, "NodeODM nicht verfügbar, verwende lokale ODM-CLI...")
-                image_dir = os.path.commonpath(valid_paths) if len(valid_paths) > 1 else str(Path(valid_paths[0]).parent)
+                image_dir = self._stage_images(valid_paths, self.project.output_dir)
                 result_paths = runner.run_via_cli(
                     image_dir,
                     self.project.output_dir,
@@ -177,3 +178,37 @@ class Pipeline:
             logger.error("Pipeline-Fehler: %s", exc, exc_info=True)
             self.project.status = "fehler"
             self._put(ErrorEvent(str(exc)))
+
+    @staticmethod
+    def _stage_images(valid_paths: list[str], output_dir: str) -> str:
+        """Gibt ein Verzeichnis zurück, in dem alle Bilder liegen.
+
+        Wenn alle Bilder bereits in einem gemeinsamen Elternverzeichnis
+        liegen, wird dieses zurückgegeben. Andernfalls werden die Bilder
+        (via Symlink, Fallback auf Kopie) in ``{output_dir}/images/``
+        zusammengeführt.
+        """
+        parents = {Path(p).parent for p in valid_paths}
+        if len(parents) == 1:
+            return str(next(iter(parents)))
+
+        staging = Path(output_dir) / "images"
+        staging.mkdir(parents=True, exist_ok=True)
+        seen_names: dict[str, int] = {}
+        for src in valid_paths:
+            src_path = Path(src)
+            stem, suffix = src_path.stem, src_path.suffix
+            if stem in seen_names:
+                seen_names[stem] += 1
+                dest_name = f"{stem}_{seen_names[stem]}{suffix}"
+            else:
+                seen_names[stem] = 0
+                dest_name = src_path.name
+            dest = staging / dest_name
+            if not dest.exists():
+                try:
+                    dest.symlink_to(src_path.resolve())
+                except (OSError, NotImplementedError):
+                    shutil.copy2(src, dest)
+        logger.info("Bilder in Staging-Ordner zusammengeführt: %s", staging)
+        return str(staging)

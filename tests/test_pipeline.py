@@ -216,3 +216,72 @@ class TestPipelineEvents:
         meta_events = [e for e in events if isinstance(e, MetadataEvent)]
         assert len(meta_events) == 1
         assert len(meta_events[0].metadata) == 3
+
+
+class TestStageImages:
+    def test_single_directory_returned_directly(self, tmp_path):
+        from drone2map.processing.pipeline import Pipeline
+        img1 = tmp_path / "a.jpg"
+        img2 = tmp_path / "b.jpg"
+        img1.write_bytes(b"")
+        img2.write_bytes(b"")
+        result = Pipeline._stage_images([str(img1), str(img2)], str(tmp_path))
+        assert result == str(tmp_path)
+
+    def test_multiple_directories_creates_staging(self, tmp_path):
+        from drone2map.processing.pipeline import Pipeline
+        dir_a = tmp_path / "a"
+        dir_b = tmp_path / "b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+        img1 = dir_a / "img.jpg"
+        img2 = dir_b / "img.jpg"
+        img1.write_bytes(b"aa")
+        img2.write_bytes(b"bb")
+        out = tmp_path / "out"
+        result = Pipeline._stage_images([str(img1), str(img2)], str(out))
+        staging = out / "images"
+        assert result == str(staging)
+        assert staging.is_dir()
+
+    def test_staging_contains_all_images(self, tmp_path):
+        from drone2map.processing.pipeline import Pipeline
+        dir_a = tmp_path / "a"
+        dir_b = tmp_path / "b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+        (dir_a / "img1.jpg").write_bytes(b"1")
+        (dir_b / "img2.jpg").write_bytes(b"2")
+        out = tmp_path / "out"
+        Pipeline._stage_images(
+            [str(dir_a / "img1.jpg"), str(dir_b / "img2.jpg")], str(out))
+        staged = list((out / "images").iterdir())
+        assert len(staged) == 2
+
+    def test_staging_handles_name_conflicts(self, tmp_path):
+        from drone2map.processing.pipeline import Pipeline
+        dir_a = tmp_path / "a"
+        dir_b = tmp_path / "b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+        (dir_a / "img.jpg").write_bytes(b"1")
+        (dir_b / "img.jpg").write_bytes(b"2")
+        out = tmp_path / "out"
+        Pipeline._stage_images(
+            [str(dir_a / "img.jpg"), str(dir_b / "img.jpg")], str(out))
+        staged = list((out / "images").iterdir())
+        assert len(staged) == 2
+
+    def test_staging_idempotent_on_second_call(self, tmp_path):
+        """Zweiter Aufruf mit gleichen Bildern darf keinen Fehler werfen."""
+        from drone2map.processing.pipeline import Pipeline
+        dir_a = tmp_path / "a"
+        dir_b = tmp_path / "b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+        (dir_a / "x.jpg").write_bytes(b"x")
+        (dir_b / "y.jpg").write_bytes(b"y")
+        out = tmp_path / "out"
+        paths = [str(dir_a / "x.jpg"), str(dir_b / "y.jpg")]
+        Pipeline._stage_images(paths, str(out))
+        Pipeline._stage_images(paths, str(out))  # should not raise

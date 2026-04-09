@@ -1,6 +1,7 @@
 """Projektmanagement: JSON-basierte Projekte."""
 from __future__ import annotations
-import json, logging
+import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -66,12 +67,15 @@ class Project:
         added = 0
         for p in paths:
             if p not in existing:
-                self.image_paths.append(p); existing.add(p); added += 1
+                self.image_paths.append(p)
+                existing.add(p)
+                added += 1
         return added
 
     def remove_image(self, path: str) -> bool:
         if path in self.image_paths:
-            self.image_paths.remove(path); return True
+            self.image_paths.remove(path)
+            return True
         return False
 
     def set_result(self, key: str, path: str) -> None:

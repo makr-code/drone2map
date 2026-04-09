@@ -1,6 +1,9 @@
 """ODM-Integration via pyodm (NodeODM) mit CLI-Fallback."""
 from __future__ import annotations
-import logging, subprocess, threading, time
+import logging
+import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -104,7 +107,8 @@ class OdmRunner:
             for c in cands:
                 p = out / c
                 if p.exists():
-                    results[key] = str(p); break
+                    results[key] = str(p)
+                    break
         return results
 
     def is_nodeodm_available(self) -> bool:

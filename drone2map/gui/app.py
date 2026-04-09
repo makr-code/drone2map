@@ -72,6 +72,10 @@ class App:
         file_menu.add_command(label="Projekt öffnen…", accelerator="Ctrl+O", command=self._open_project)
         file_menu.add_command(label="Projekt speichern", accelerator="Ctrl+S", command=self._save_project)
         file_menu.add_separator()
+        self._recent_menu = tk.Menu(file_menu, tearoff=False)
+        file_menu.add_cascade(label="Zuletzt geöffnet", menu=self._recent_menu)
+        self._rebuild_recent_menu()
+        file_menu.add_separator()
         file_menu.add_command(label="Bilder hinzufügen…", command=self._add_images)
         file_menu.add_separator()
         file_menu.add_command(label="Beenden", command=self._on_close)
@@ -156,6 +160,7 @@ class App:
             self._settings.add_recent(path)
             self._settings.last_project = path
             self._reload_images()
+            self._rebuild_recent_menu()
             self._status(f"Projekt geladen: {self._project.name}")
         except Exception as exc:
             messagebox.showerror("Fehler", f"Projekt konnte nicht geladen werden:\n{exc}")
@@ -175,6 +180,10 @@ class App:
             path = self._project.file_path
         try:
             self._project.save(path)
+            self._settings.add_recent(path)
+            self._settings.last_project = path
+            self._settings.save()
+            self._rebuild_recent_menu()
             self._status(f"Gespeichert: {path}")
         except Exception as exc:
             messagebox.showerror("Fehler", f"Speichern fehlgeschlagen:\n{exc}")
@@ -276,6 +285,12 @@ class App:
     def _on_processing_done(self, results: dict) -> None:
         self._progress.set_running(False)
         self._status(f"Fertig! {len(results)} Ergebnisse erstellt.")
+        # Projekt automatisch speichern damit Ergebnispfade persistiert werden
+        if self._project is not None and self._project.file_path:
+            try:
+                self._project.save()
+            except Exception as exc:
+                logger.warning("Auto-Speichern fehlgeschlagen: %s", exc)
         messagebox.showinfo("Fertig", f"Verarbeitung abgeschlossen.\nErgebnisse in:\n{self._project.output_dir}")  # type: ignore[union-attr]
 
     def _on_processing_error(self, msg: str) -> None:
@@ -296,6 +311,31 @@ class App:
     # ------------------------------------------------------------------ #
     # Hilfsmethoden                                                        #
     # ------------------------------------------------------------------ #
+
+    def _rebuild_recent_menu(self) -> None:
+        """Baut das „Zuletzt geöffnet"-Untermenü neu auf."""
+        self._recent_menu.delete(0, "end")
+        recents = self._settings.recent_projects
+        if not recents:
+            self._recent_menu.add_command(label="(keine)", state="disabled")
+            return
+        for path in recents:
+            self._recent_menu.add_command(
+                label=path,
+                command=lambda p=path: self._open_recent(p),
+            )
+
+    def _open_recent(self, path: str) -> None:
+        """Öffnet ein kürzlich verwendetes Projekt direkt."""
+        try:
+            self._project = Project.load(path)
+            self._settings.add_recent(path)
+            self._settings.last_project = path
+            self._reload_images()
+            self._rebuild_recent_menu()
+            self._status(f"Projekt geladen: {self._project.name}")
+        except Exception as exc:
+            messagebox.showerror("Fehler", f"Projekt konnte nicht geladen werden:\n{exc}")
 
     def _ensure_project(self) -> None:
         if self._project is None:

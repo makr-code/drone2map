@@ -1,9 +1,11 @@
 """Verarbeitungs-Pipeline mit Queue-basierter Event-Kommunikation."""
 from __future__ import annotations
 import logging
+import os
 import queue
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from ..core.exif_parser import ExifParser, ImageMetadata
@@ -131,13 +133,26 @@ class Pipeline:
             def odm_prog(pct: float, msg: str) -> None:
                 self._prog(10.0 + pct * 0.85, msg)
 
-            result_paths = runner.run_via_nodeodm(
-                valid_paths,
-                self.project.output_dir,
-                options=opts,
-                progress_callback=odm_prog,
-                stop_event=self._stop_event,
-            )
+            if runner.is_nodeodm_available():
+                logger.info("Verbinde NodeODM auf %s:%s", s.node_host, s.node_port)
+                result_paths = runner.run_via_nodeodm(
+                    valid_paths,
+                    self.project.output_dir,
+                    options=opts,
+                    progress_callback=odm_prog,
+                    stop_event=self._stop_event,
+                )
+            else:
+                logger.info("NodeODM nicht erreichbar – verwende ODM-CLI")
+                self._prog(10.0, "NodeODM nicht verfügbar, verwende lokale ODM-CLI...")
+                image_dir = os.path.commonpath(valid_paths) if len(valid_paths) > 1 else str(Path(valid_paths[0]).parent)
+                result_paths = runner.run_via_cli(
+                    image_dir,
+                    self.project.output_dir,
+                    options=opts,
+                    progress_callback=odm_prog,
+                    stop_event=self._stop_event,
+                )
 
             if self._stop_event.is_set():
                 return

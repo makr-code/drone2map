@@ -1,6 +1,7 @@
 """Koordinatentransformationen und Geo-Berechnungen."""
 from __future__ import annotations
-import logging, math
+import logging
+import math
 from typing import Optional
 
 logger = logging.getLogger(__name__)

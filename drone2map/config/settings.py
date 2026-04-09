@@ -1,6 +1,7 @@
 """Persistente App-Einstellungen (JSON)."""
 from __future__ import annotations
-import json, logging
+import json
+import logging
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional

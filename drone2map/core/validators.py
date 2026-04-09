@@ -30,18 +30,25 @@ class ImageValidator:
         path = Path(path)
         r = ValidationResult(file_path=str(path))
         if not path.exists():
-            r.valid = False; r.errors.append("Datei nicht gefunden"); return r
+            r.valid = False
+            r.errors.append("Datei nicht gefunden")
+            return r
         if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-            r.valid = False; r.errors.append(f"Unsupported: {path.suffix}"); return r
+            r.valid = False
+            r.errors.append(f"Unsupported: {path.suffix}")
+            return r
         if path.stat().st_size / 1_048_576 > self.max_size_mb:
             r.warnings.append(f"Große Datei: {path.stat().st_size/1_048_576:.1f} MB")
         try:
             meta = self._parser.parse_file(path)
             r.metadata = meta
         except Exception as exc:
-            r.valid = False; r.errors.append(f"EXIF-Fehler: {exc}"); return r
+            r.valid = False
+            r.errors.append(f"EXIF-Fehler: {exc}")
+            return r
         if self.require_gps and not meta.gps_valid:
-            r.valid = False; r.errors.append("Keine GPS-Koordinaten")
+            r.valid = False
+            r.errors.append("Keine GPS-Koordinaten")
         return r
 
     def validate_batch(self, paths: list[str | Path]) -> list[ValidationResult]:

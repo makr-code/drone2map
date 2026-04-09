@@ -55,6 +55,18 @@ class App:
         self._build_ui()
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    def open_project_file(self, path: str) -> None:
+        """Öffnet eine Projektdatei programmatisch (z. B. via CLI --project)."""
+        try:
+            self._project = Project.load(path)
+            self._settings.add_recent(path)
+            self._settings.last_project = path
+            self._reload_images()
+            self._rebuild_recent_menu()
+            self._status(f"Projekt geladen: {self._project.name}")
+        except Exception as exc:
+            logger.error("Projekt konnte nicht geladen werden: %s", exc)
+
     def run(self) -> None:
         self._root.mainloop()
 
@@ -102,6 +114,7 @@ class App:
         toolbar.pack(side="top", fill="x", padx=6, pady=4)
         ttk.Button(toolbar, text="+ Bilder", command=self._add_images).pack(side="left", padx=2)
         ttk.Button(toolbar, text="Ordner", command=self._add_folder).pack(side="left", padx=2)
+        ttk.Button(toolbar, text="Ausgewählte löschen", command=self._remove_selected_images).pack(side="left", padx=2)
         ttk.Button(toolbar, text="Alles löschen", command=self._clear_images).pack(side="left", padx=2)
 
         # Haupt-PanedWindow
@@ -111,7 +124,8 @@ class App:
         # Linke Seite: Bildliste + Metadaten
         left = ttk.Frame(paned)
         paned.add(left, weight=1)
-        self._image_list = ImageListWidget(left, on_select=self._on_image_select)
+        self._image_list = ImageListWidget(left, on_select=self._on_image_select,
+                                           on_remove=self._on_images_removed)
         self._image_list.pack(fill="both", expand=True)
         self._meta_panel = MetadataPanel(left)
         self._meta_panel.pack(fill="x", pady=(4, 0))
@@ -220,6 +234,28 @@ class App:
             self._map_view.clear()
             self._meta_panel.show(None)
             self._status("Bildliste geleert")
+
+    def _remove_selected_images(self) -> None:
+        """Entfernt die in der Liste selektierten Bilder aus dem Projekt."""
+        if self._project is None:
+            return
+        paths = self._image_list.get_selected_paths()
+        if not paths:
+            self._status("Keine Bilder ausgewählt")
+            return
+        self._on_images_removed(paths)
+
+    def _on_images_removed(self, paths: list[str]) -> None:
+        """Callback: Bilder aus Projekt-Modell entfernen und GUI aktualisieren."""
+        if self._project is None:
+            return
+        for p in paths:
+            self._project.remove_image(p)
+        self._metadata = [m for m in self._metadata if m.file_path not in set(paths)]
+        self._image_list.set_images(self._metadata)
+        self._map_view.set_images(self._metadata)
+        self._meta_panel.show(None)
+        self._status(f"{len(paths)} Bild(er) entfernt ({self._project.image_count} verbleibend)")
 
     def _reload_images(self) -> None:
         if self._project is None:

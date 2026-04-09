@@ -73,7 +73,8 @@ class ExifParser:
             meta.altitude = float(v.num) / float(v.den)
         except (KeyError, ZeroDivisionError):
             pass
-        for tag, attr in [("Image Make","camera_make"),("Image Model","camera_model"),("EXIF DateTimeOriginal","datetime_original")]:
+        for tag, attr in [("Image Make", "camera_make"), ("Image Model", "camera_model"),
+                           ("EXIF DateTimeOriginal", "datetime_original")]:
             if tag in tags:
                 setattr(meta, attr, str(tags[tag]))
         if "EXIF FocalLength" in tags:
@@ -82,7 +83,9 @@ class ExifParser:
                 meta.focal_length = float(v.num) / float(v.den)
             except (AttributeError, ZeroDivisionError):
                 pass
-        for tag, attr in [("EXIF ExifImageWidth","image_width"),("EXIF ExifImageLength","image_height"),("EXIF ISOSpeedRatings","iso")]:
+        for tag, attr in [("EXIF ExifImageWidth", "image_width"),
+                           ("EXIF ExifImageLength", "image_height"),
+                           ("EXIF ISOSpeedRatings", "iso")]:
             if tag in tags:
                 try:
                     setattr(meta, attr, int(str(tags[tag])))
@@ -121,5 +124,8 @@ class ExifParser:
 
     def parse_folder(self, folder: str | Path) -> list[ImageMetadata]:
         folder = Path(folder)
-        files = sorted([f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS], key=lambda f: f.name)
+        files = sorted(
+            [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS],
+            key=lambda f: f.name,
+        )
         return [self.parse_file(f) for f in files]

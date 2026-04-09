@@ -57,6 +57,12 @@ class SettingsDialog(tk.Toplevel):
         nb.add(tab_node, text="NodeODM")
         self._add_str_field(tab_node, 0, "Host", "node_host", ps.node_host)
         self._add_int_field(tab_node, 1, "Port", "node_port", ps.node_port)
+        self._node_status_var = tk.StringVar(value="")
+        ttk.Button(tab_node, text="Verbindung testen",
+                   command=self._test_nodeodm_connection).grid(
+            row=2, column=0, columnspan=2, pady=(12, 4), padx=8, sticky="w")
+        ttk.Label(tab_node, textvariable=self._node_status_var,
+                  anchor="w").grid(row=3, column=0, columnspan=3, sticky="w", padx=8)
 
         # ---- Buttons ----
         btn_frame = ttk.Frame(self)
@@ -100,6 +106,27 @@ class SettingsDialog(tk.Toplevel):
         ttk.Label(parent, text=label, width=28, anchor="e").grid(row=row, column=0, sticky="e", padx=8, pady=4)
         ttk.Combobox(parent, textvariable=var, values=choices, state="readonly", width=12
                      ).grid(row=row, column=1, sticky="w", padx=8, pady=4)
+
+    def _test_nodeodm_connection(self) -> None:
+        """Testet die NodeODM-Verbindung mit den aktuell eingetragenen Werten."""
+        try:
+            host = str(self._vars["node_host"].get())
+            port = int(self._vars["node_port"].get())
+        except (KeyError, ValueError):
+            self._node_status_var.set("⚠ Ungültige Host/Port-Angabe")
+            return
+        self._node_status_var.set("⏳ Verbinde…")
+        self.update_idletasks()
+        try:
+            from ...processing.odm_runner import OdmRunner
+            available = OdmRunner(host=host, port=port).is_nodeodm_available()
+        except Exception as exc:
+            self._node_status_var.set(f"✗ Fehler: {exc}")
+            return
+        if available:
+            self._node_status_var.set(f"✓ NodeODM erreichbar auf {host}:{port}")
+        else:
+            self._node_status_var.set(f"✗ NodeODM nicht erreichbar auf {host}:{port}")
 
     def _save(self) -> None:
         try:

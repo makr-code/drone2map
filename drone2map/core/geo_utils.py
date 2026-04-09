@@ -5,7 +5,14 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+
 class GeoUtils:
+    """Sammlung statischer Geo-Hilfsmethoden (Namespace-Klasse).
+
+    Alle Methoden sind ``@staticmethod`` ohne Zustand.  Die Klasse dient
+    ausschließlich als Namensraum; es werden keine Instanzen benötigt.
+    Aufrufe erfolgen direkt über die Klasse: ``GeoUtils.haversine_distance(...)``.
+    """
     @staticmethod
     def wgs84_to_utm(lat: float, lon: float) -> tuple[float, float, str]:
         zone = int((lon + 180) / 6) + 1

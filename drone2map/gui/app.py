@@ -2,15 +2,22 @@
 from __future__ import annotations
 
 import logging
+import queue
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 from ..config.settings import AppSettings
-from ..core.exif_parser import ExifParser, ImageMetadata
+from ..core.exif_parser import ExifParser, ImageMetadata, SUPPORTED_EXTENSIONS
 from ..core.project import Project, ProjectSettings
-from ..processing.pipeline import Pipeline
+from ..processing.pipeline import (
+    Pipeline,
+    ProgressEvent,
+    MetadataEvent,
+    DoneEvent,
+    ErrorEvent,
+)
 from .widgets.image_list import ImageListWidget
 from .widgets.map_view import MapViewWidget
 from .widgets.metadata_panel import MetadataPanel
@@ -34,6 +41,7 @@ class App:
         self._project: Optional[Project] = None
         self._pipeline: Optional[Pipeline] = None
         self._metadata: list[ImageMetadata] = []
+        self._exif_parser = ExifParser()
 
         if _HAS_BOOTSTRAP:
             self._root = ttk_bs.Window(themename=settings.theme)
@@ -187,7 +195,6 @@ class App:
         if not folder:
             return
         self._ensure_project()
-        from ..core.exif_parser import SUPPORTED_EXTENSIONS
         paths = [str(p) for p in Path(folder).iterdir()
                  if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
         added = self._project.add_images(paths)  # type: ignore[union-attr]
@@ -208,8 +215,7 @@ class App:
     def _reload_images(self) -> None:
         if self._project is None:
             return
-        parser = ExifParser()
-        self._metadata = [parser.parse_file(p) for p in self._project.image_paths]
+        self._metadata = [self._exif_parser.parse_file(p) for p in self._project.image_paths]
         self._image_list.set_images(self._metadata)
         self._map_view.set_images(self._metadata)
 
@@ -236,23 +242,30 @@ class App:
             return
         self._progress.clear_log()
         self._progress.set_running(True)
-        self._project.status = "verarbeitung"
         self._pipeline = Pipeline(self._project)
+        self._pipeline.run_async()
+        self._root.after(50, self._poll_queue)
 
-        def on_prog(pct, msg):
-            self._root.after(0, lambda: self._progress.set_progress(pct, msg))
-
-        def on_meta(metadata):
-            self._root.after(0, lambda: self._image_list.set_images(metadata))
-
-        def on_done(results):
-            self._root.after(0, self._on_processing_done, results)
-
-        def on_err(msg):
-            self._root.after(0, self._on_processing_error, msg)
-
-        self._pipeline.run_async(on_progress=on_prog, on_metadata=on_meta,
-                                  on_finished=on_done, on_error=on_err)
+    def _poll_queue(self) -> None:
+        """Polt die Pipeline-Event-Queue und aktualisiert die GUI (läuft im GUI-Thread)."""
+        if self._pipeline is None:
+            return
+        try:
+            while True:
+                event = self._pipeline.event_queue.get_nowait()
+                if isinstance(event, ProgressEvent):
+                    self._progress.set_progress(event.percent, event.message)
+                elif isinstance(event, MetadataEvent):
+                    self._image_list.set_images(event.metadata)
+                elif isinstance(event, DoneEvent):
+                    self._on_processing_done(event.result_paths)
+                    return
+                elif isinstance(event, ErrorEvent):
+                    self._on_processing_error(event.message)
+                    return
+        except queue.Empty:
+            pass
+        self._root.after(50, self._poll_queue)
 
     def _stop_processing(self) -> None:
         if self._pipeline:

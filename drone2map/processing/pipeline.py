@@ -1,8 +1,11 @@
-"""Verarbeitungs-Pipeline."""
+"""Verarbeitungs-Pipeline mit Queue-basierter Event-Kommunikation."""
 from __future__ import annotations
-import logging, threading
-from pathlib import Path
-from typing import Callable, Optional
+import logging
+import queue
+import threading
+from dataclasses import dataclass
+from typing import Optional
+
 from ..core.exif_parser import ExifParser, ImageMetadata
 from ..core.validators import ImageValidator
 from ..core.project import Project
@@ -10,56 +13,137 @@ from .odm_runner import OdmRunner
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Typed pipeline events
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ProgressEvent:
+    """Fortschritts-Update vom Hintergrund-Thread."""
+    percent: float
+    message: str
+
+
+@dataclass
+class MetadataEvent:
+    """EXIF-Metadaten nach der Validierungsphase verfügbar."""
+    metadata: list[ImageMetadata]
+
+
+@dataclass
+class DoneEvent:
+    """Pipeline erfolgreich abgeschlossen."""
+    result_paths: dict[str, str]
+
+
+@dataclass
+class ErrorEvent:
+    """Nicht behandelbarer Fehler in der Pipeline."""
+    message: str
+
+
+# Union-Typ aller möglichen Events (nur zur Dokumentation, keine Laufzeit-Auswirkung)
+PipelineEvent = ProgressEvent | MetadataEvent | DoneEvent | ErrorEvent
+
+
+# ---------------------------------------------------------------------------
+# Pipeline
+# ---------------------------------------------------------------------------
+
 class Pipeline:
+    """Koordiniert Validierung, EXIF-Extraktion und ODM-Verarbeitung.
+
+    Alle Fortschritts- und Ergebnis-Meldungen werden über eine
+    ``queue.Queue`` kommuniziert. Der GUI-Thread polt diese Queue
+    periodisch (z. B. via ``root.after``) und liest Events thread-sicher aus.
+    """
+
     def __init__(self, project: Project):
         self.project = project
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._queue: queue.Queue[PipelineEvent] = queue.Queue()
 
-    def run_async(self,
-                  on_progress: Optional[Callable[[float, str], None]] = None,
-                  on_metadata: Optional[Callable[[list[ImageMetadata]], None]] = None,
-                  on_finished: Optional[Callable[[dict[str, str]], None]] = None,
-                  on_error: Optional[Callable[[str], None]] = None) -> None:
+    @property
+    def event_queue(self) -> queue.Queue[PipelineEvent]:
+        """Thread-sichere Queue für ``PipelineEvent``-Objekte."""
+        return self._queue
+
+    def run_async(self) -> None:
+        """Startet die Pipeline im Hintergrund-Thread."""
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run,
-            args=(on_progress, on_metadata, on_finished, on_error), daemon=True)
+        self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
+        """Fordert den Hintergrund-Thread auf, kooperativ zu stoppen."""
         self._stop_event.set()
 
-    def _run(self, on_progress, on_metadata, on_finished, on_error) -> None:
-        def prog(pct, msg):
-            if on_progress: on_progress(pct, msg)
+    # ------------------------------------------------------------------
+    # Internas
+    # ------------------------------------------------------------------
+
+    def _put(self, event: PipelineEvent) -> None:
+        self._queue.put(event)
+
+    def _prog(self, pct: float, msg: str) -> None:
+        self._put(ProgressEvent(pct, msg))
+
+    def _run(self) -> None:
         try:
-            prog(0.0, f"Validiere {len(self.project.image_paths)} Bilder...")
-            results = ImageValidator().validate_batch(self.project.image_paths)
+            self.project.status = "verarbeitung"
+            self._prog(0.0, f"Validiere {len(self.project.image_paths)} Bilder...")
+
+            s = self.project.settings
+            results = ImageValidator(
+                require_gps=True,
+                max_size_mb=500,
+            ).validate_batch(self.project.image_paths)
             valid_paths = [r.file_path for r in results if r.valid]
             if len(valid_paths) < 3:
                 raise RuntimeError(f"Zu wenige valide Bilder: {len(valid_paths)}")
-            if self._stop_event.is_set(): return
-            prog(5.0, "Lese EXIF-Metadaten...")
-            metadata = [ExifParser().parse_file(p) for p in valid_paths]
-            if on_metadata: on_metadata(metadata)
-            if self._stop_event.is_set(): return
-            prog(10.0, "Starte ODM-Verarbeitung...")
-            s = self.project.settings
+
+            if self._stop_event.is_set():
+                return
+
+            self._prog(5.0, "Lese EXIF-Metadaten...")
+            parser = ExifParser()
+            metadata = [parser.parse_file(p) for p in valid_paths]
+            self._put(MetadataEvent(metadata))
+
+            if self._stop_event.is_set():
+                return
+
+            self._prog(10.0, "Starte ODM-Verarbeitung...")
             runner = OdmRunner(host=s.node_host, port=s.node_port)
-            opts = {"dsm": s.dsm, "dtm": s.dtm,
-                    "orthophoto-resolution": str(s.orthophoto_resolution),
-                    "feature-quality": s.feature_quality,
-                    "pc-quality": s.pc_quality,
-                    "mesh-octree-depth": str(s.mesh_octree_depth)}
-            def odm_prog(pct, msg): prog(10.0 + pct * 0.85, msg)
-            result_paths = runner.run_via_nodeodm(valid_paths, self.project.output_dir,
-                                                  options=opts, progress_callback=odm_prog)
+            opts = {
+                "dsm": s.dsm,
+                "dtm": s.dtm,
+                "orthophoto-resolution": str(s.orthophoto_resolution),
+                "feature-quality": s.feature_quality,
+                "pc-quality": s.pc_quality,
+                "mesh-octree-depth": str(s.mesh_octree_depth),
+            }
+
+            def odm_prog(pct: float, msg: str) -> None:
+                self._prog(10.0 + pct * 0.85, msg)
+
+            result_paths = runner.run_via_nodeodm(
+                valid_paths,
+                self.project.output_dir,
+                options=opts,
+                progress_callback=odm_prog,
+                stop_event=self._stop_event,
+            )
             for k, v in result_paths.items():
                 self.project.set_result(k, v)
+
             self.project.status = "fertig"
-            prog(100.0, "Fertig!")
-            if on_finished: on_finished(result_paths)
+            self._prog(100.0, "Fertig!")
+            self._put(DoneEvent(result_paths))
+
         except Exception as exc:
             logger.error("Pipeline-Fehler: %s", exc, exc_info=True)
             self.project.status = "fehler"
-            if on_error: on_error(str(exc))
+            self._put(ErrorEvent(str(exc)))

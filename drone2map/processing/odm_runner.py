@@ -1,6 +1,6 @@
 """ODM-Integration via pyodm (NodeODM) mit CLI-Fallback."""
 from __future__ import annotations
-import logging, subprocess, time
+import logging, subprocess, threading, time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -13,7 +13,8 @@ class OdmRunner:
 
     def run_via_nodeodm(self, image_paths: list[str], output_dir: str,
                         options: Optional[dict] = None,
-                        progress_callback: Optional[Callable[[float, str], None]] = None) -> dict[str, str]:
+                        progress_callback: Optional[Callable[[float, str], None]] = None,
+                        stop_event: Optional[threading.Event] = None) -> dict[str, str]:
         try:
             from pyodm import Node
         except ImportError as exc:
@@ -33,6 +34,9 @@ class OdmRunner:
             progress_callback(2.0, f"Lade {len(image_paths)} Bilder hoch...")
         task = node.create_task(image_paths, options=opts)
         while True:
+            if stop_event is not None and stop_event.is_set():
+                task.cancel()
+                return {}
             info = task.info()
             pct = info.progress or 0.0
             status = info.status.name if info.status else "UNBEKANNT"

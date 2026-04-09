@@ -13,7 +13,7 @@ class Exporter:
         self.output_dir = Path(output_dir)
 
     def export_geotiff(self, src: str, dest_name: str, reproject_epsg: Optional[str] = None) -> str:
-        """Kopiert/reprojiziertein GeoTIFF in das Ausgabeverzeichnis."""
+        """Kopiert/reprojiziert ein GeoTIFF in das Ausgabeverzeichnis."""
         self.output_dir.mkdir(parents=True, exist_ok=True)
         dest = self.output_dir / dest_name
         if reproject_epsg:

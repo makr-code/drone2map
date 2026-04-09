@@ -247,7 +247,7 @@ class App:
         self._root.after(50, self._poll_queue)
 
     def _poll_queue(self) -> None:
-        """Polt die Pipeline-Event-Queue und aktualisiert die GUI (läuft im GUI-Thread)."""
+        """Pollt die Pipeline-Event-Queue und aktualisiert die GUI (läuft im GUI-Thread)."""
         if self._pipeline is None:
             return
         try:

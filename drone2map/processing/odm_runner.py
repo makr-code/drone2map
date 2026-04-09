@@ -59,7 +59,8 @@ class OdmRunner:
 
     def run_via_cli(self, image_dir: str, output_dir: str,
                     options: Optional[dict] = None,
-                    progress_callback: Optional[Callable[[float, str], None]] = None) -> dict[str, str]:
+                    progress_callback: Optional[Callable[[float, str], None]] = None,
+                    stop_event: Optional[threading.Event] = None) -> dict[str, str]:
         opts: dict = {"dsm": True, "dtm": True, "orthophoto-resolution": "5",
                       "feature-quality": "high", "pc-quality": "high", "mesh-octree-depth": "12"}
         if options:
@@ -75,6 +76,9 @@ class OdmRunner:
             progress_callback(0.0, "Starte ODM CLI...")
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         for line in proc.stdout or []:
+            if stop_event is not None and stop_event.is_set():
+                proc.terminate()
+                return {}
             line = line.rstrip()
             logger.debug("ODM: %s", line)
             if progress_callback and line:

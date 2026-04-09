@@ -7,8 +7,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..core.exif_parser import ExifParser, ImageMetadata
+from ..core.geo_utils import GeoUtils
 from ..core.validators import ImageValidator
 from ..core.project import Project
+from .export import Exporter
 from .odm_runner import OdmRunner
 
 logger = logging.getLogger(__name__)
@@ -55,7 +57,7 @@ class Pipeline:
     """Koordiniert Validierung, EXIF-Extraktion und ODM-Verarbeitung.
 
     Alle Fortschritts- und Ergebnis-Meldungen werden über eine
-    ``queue.Queue`` kommuniziert. Der GUI-Thread polt diese Queue
+    ``queue.Queue`` kommuniziert. Der GUI-Thread pollt diese Queue
     periodisch (z. B. via ``root.after``) und liest Events thread-sicher aus.
     """
 
@@ -136,12 +138,25 @@ class Pipeline:
                 progress_callback=odm_prog,
                 stop_event=self._stop_event,
             )
-            for k, v in result_paths.items():
+
+            if self._stop_event.is_set():
+                return
+
+            self._prog(95.0, "Exportiere und reprojiziere Ergebnisse...")
+            lats = [m.latitude for m in metadata if m.latitude is not None]
+            lons = [m.longitude for m in metadata if m.longitude is not None]
+            target_epsg = GeoUtils.best_utm_epsg(lats, lons) if lats else None
+            exporter = Exporter(self.project.output_dir)
+            exported = exporter.export_all(result_paths, reproject_epsg=target_epsg)
+            final_paths = exported if exported else result_paths
+            exporter.create_export_report(final_paths, self.project.name)
+
+            for k, v in final_paths.items():
                 self.project.set_result(k, v)
 
             self.project.status = "fertig"
             self._prog(100.0, "Fertig!")
-            self._put(DoneEvent(result_paths))
+            self._put(DoneEvent(final_paths))
 
         except Exception as exc:
             logger.error("Pipeline-Fehler: %s", exc, exc_info=True)

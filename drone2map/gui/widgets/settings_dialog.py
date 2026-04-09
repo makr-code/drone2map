@@ -114,6 +114,10 @@ class SettingsDialog(tk.Toplevel):
                 node_host=str(self._vars["node_host"].get()),
                 node_port=int(self._vars["node_port"].get()),
             )
-        except (ValueError, KeyError):
-            pass
+        except (ValueError, KeyError) as exc:
+            from tkinter import messagebox
+            messagebox.showerror("Ungültige Eingabe",
+                                 f"Bitte alle Felder korrekt ausfüllen:\n{exc}",
+                                 parent=self)
+            return
         self.destroy()

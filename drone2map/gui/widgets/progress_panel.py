@@ -42,6 +42,9 @@ class ProgressPanel(ttk.LabelFrame):
     def set_progress(self, pct: float, message: str) -> None:
         """Aktualisiert Fortschrittsbalken und Statustext (thread-safe via after)."""
         if pct >= 0:
+            if str(self._bar.cget("mode")) == "indeterminate":
+                self._bar.stop()
+                self._bar.configure(mode="determinate")
             self._pct_var.set(min(pct, 100.0))
         self._status_var.set(message)
         self._append_log(message)

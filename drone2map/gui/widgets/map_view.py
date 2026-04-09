@@ -38,7 +38,7 @@ class MapViewWidget(ttk.Frame):
             m.delete()
         self._markers.clear()
 
-        gps_images = [img for img in images if img.gps_valid and img.latitude and img.longitude]
+        gps_images = [img for img in images if img.has_valid_coordinates]
         if not gps_images:
             return
 

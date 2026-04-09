@@ -29,10 +29,17 @@ class ImageMetadata:
     def filename(self) -> str:
         return Path(self.file_path).name
 
+    @property
+    def has_valid_coordinates(self) -> bool:
+        """True wenn GPS-Flag gesetzt und beide Koordinaten vorhanden sind."""
+        return self.gps_valid and self.latitude is not None and self.longitude is not None
+
 
 def _dms_to_decimal(values: list, ref: str) -> float:
     def to_f(v):
-        return float(v.num) / float(v.den) if hasattr(v, "num") else float(v)
+        if hasattr(v, "num") and hasattr(v, "den") and v.den:
+            return float(v.num) / float(v.den)
+        return float(v)
     d, m, s = to_f(values[0]), to_f(values[1]), to_f(values[2])
     dec = d + m / 60.0 + s / 3600.0
     return -dec if ref.upper() in ("S", "W") else dec

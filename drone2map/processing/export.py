@@ -33,7 +33,7 @@ class Exporter:
                                       src_transform=src_ds.transform, src_crs=src_ds.crs,
                                       dst_transform=transform, dst_crs=reproject_epsg,
                                       resampling=Resampling.nearest)
-                logger.info("Reprojiziiert: %s -> %s", src, dest)
+                logger.info("Reprojiziert: %s -> %s", src, dest)
             except ImportError:
                 logger.warning("rasterio nicht verfügbar, einfache Kopie")
                 shutil.copy2(src, dest)

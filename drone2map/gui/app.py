@@ -5,7 +5,7 @@ import logging
 import queue
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
 
 from ..config.settings import AppSettings
@@ -133,7 +133,7 @@ class App:
     # ------------------------------------------------------------------ #
 
     def _new_project(self) -> None:
-        name = tk.simpledialog.askstring("Neues Projekt", "Projektname:", parent=self._root) if _has_simpledialog() else "Neues Projekt"
+        name = simpledialog.askstring("Neues Projekt", "Projektname:", parent=self._root)
         if not name:
             return
         output = filedialog.askdirectory(title="Ausgabeverzeichnis wählen")
@@ -222,7 +222,7 @@ class App:
     def _on_image_select(self, path: str) -> None:
         meta = next((m for m in self._metadata if m.file_path == path), None)
         self._meta_panel.show(meta)
-        if meta and meta.gps_valid and meta.latitude and meta.longitude:
+        if meta and meta.has_valid_coordinates:
             self._map_view.center_on(meta.latitude, meta.longitude)
 
     def _open_settings(self) -> None:
@@ -312,10 +312,3 @@ class App:
         self._status_var.set(msg)
         logger.info(msg)
 
-
-def _has_simpledialog() -> bool:
-    try:
-        from tkinter import simpledialog  # noqa: F401
-        return True
-    except ImportError:
-        return False

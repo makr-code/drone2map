@@ -1,8 +1,6 @@
 # drone2map
 
-**Drohnenbilder zu Orthofoto, DSM und DGM verarbeiten** – eine Python-Desktop-Anwendung auf Basis von [OpenDroneMap (ODM)](https://www.opendronemap.org/).
-
-![Hauptfenster](docs/screenshots/main_window.png) <!-- Screenshot-Platzhalter -->
+**drone2map** – eine Python-Desktop-Anwendung auf Basis von [OpenDroneMap (ODM)](https://www.opendronemap.org/).
 
 ## Funktionen
 
@@ -16,11 +14,11 @@
 
 ## Screenshots
 
+<!-- Fügen Sie nach dem ersten Start eigene Screenshots in docs/screenshots/ ein. -->
+
 | Hauptfenster | Einstellungen |
 |---|---|
-| ![Hauptfenster](docs/screenshots/main_window.png) | ![Einstellungen](docs/screenshots/settings.png) |
-
-*Screenshots werden nach dem ersten Start automatisch aktualisiert.*
+| *(docs/screenshots/main_window.png)* | *(docs/screenshots/settings.png)* |
 
 ## Installation
 
@@ -160,7 +158,7 @@ pip install pytest
 python -m pytest tests/ -q
 ```
 
-Aktuelle Testabdeckung: **106 Tests** in 8 Modulen (`test_exif_parser`, `test_geo_utils`, `test_project`, `test_validators`, `test_export`, `test_pipeline`, `test_settings`, `test_odm_runner`).
+Aktuelle Testabdeckung: **113 Tests** in 8 Modulen (`test_exif_parser`, `test_geo_utils`, `test_project`, `test_validators`, `test_export`, `test_pipeline`, `test_settings`, `test_odm_runner`).
 
 ## Lizenz
 

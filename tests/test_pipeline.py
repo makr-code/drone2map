@@ -285,3 +285,90 @@ class TestStageImages:
         paths = [str(dir_a / "x.jpg"), str(dir_b / "y.jpg")]
         Pipeline._stage_images(paths, str(out))
         Pipeline._stage_images(paths, str(out))  # should not raise
+
+
+class TestPipelineRetry:
+    """Tests für Pipeline.retry()."""
+
+    def test_retry_after_error_emits_done(self, tmp_path):
+        """Nach einem fehlgeschlagenen Lauf soll retry() einen DoneEvent liefern."""
+        proj = _make_project(tmp_path, image_count=3)
+        pipeline = Pipeline(proj)
+        fake_results = {"orthophoto": "/out/orthophoto.tif"}
+
+        call_count = 0
+
+        def validate_side_effect(paths):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("Erster Versuch fehlgeschlagen")
+            return [MagicMock(valid=True, file_path=p) for p in paths]
+
+        with patch("drone2map.processing.pipeline.ImageValidator") as MockVal, \
+             patch("drone2map.processing.pipeline.ExifParser") as MockParser, \
+             patch("drone2map.processing.pipeline.OdmRunner") as MockRunner, \
+             patch("drone2map.processing.pipeline.Exporter") as MockExp:
+
+            MockVal.return_value.validate_batch.side_effect = validate_side_effect
+
+            mock_meta = MagicMock(latitude=52.0, longitude=13.0)
+            MockParser.return_value.parse_file.return_value = mock_meta
+
+            MockRunner.return_value.is_nodeodm_available.return_value = True
+            MockRunner.return_value.run_via_nodeodm.return_value = fake_results
+
+            MockExp.return_value.export_all.return_value = fake_results
+            MockExp.return_value.create_export_report.return_value = "/out/report.txt"
+
+            # Erster Lauf – schlägt fehl
+            pipeline.run_async()
+            events_1 = _drain_queue(pipeline, timeout=2.0)
+            assert any(isinstance(e, ErrorEvent) for e in events_1)
+
+            # Retry – soll erfolgreich sein
+            pipeline.retry()
+            events_2 = _drain_queue(pipeline, timeout=3.0)
+
+        assert any(isinstance(e, DoneEvent) for e in events_2)
+
+    def test_retry_while_running_is_noop(self, tmp_path):
+        """retry() darf keinen neuen Thread starten, wenn die Pipeline noch läuft."""
+        proj = _make_project(tmp_path, image_count=3)
+        pipeline = Pipeline(proj)
+
+        started = threading.Event()
+        blocked = threading.Event()
+
+        def slow_validate(paths):
+            started.set()
+            blocked.wait(timeout=2.0)
+            return [MagicMock(valid=True, file_path=p) for p in paths]
+
+        with patch("drone2map.processing.pipeline.ImageValidator") as MockVal:
+            MockVal.return_value.validate_batch.side_effect = slow_validate
+            pipeline.run_async()
+            started.wait(timeout=1.0)
+            first_thread = pipeline._thread
+
+            # retry() während der Thread läuft: kein neuer Thread
+            pipeline.retry()
+            assert pipeline._thread is first_thread
+
+            # Aufräumen
+            blocked.set()
+            _drain_queue(pipeline, timeout=2.0)
+
+    def test_retry_noop_when_no_thread(self, tmp_path):
+        """retry() auf einer frischen Pipeline (kein Thread) startet run_async()."""
+        proj = _make_project(tmp_path, image_count=3)
+        pipeline = Pipeline(proj)
+
+        with patch("drone2map.processing.pipeline.ImageValidator") as MockVal:
+            MockVal.return_value.validate_batch.return_value = [
+                MagicMock(valid=True, file_path=p) for p in proj.image_paths
+            ]
+            # Vor run_async() ist _thread None → retry() soll run_async() aufrufen
+            pipeline.retry()
+            assert pipeline._thread is not None
+            _drain_queue(pipeline, timeout=2.0)

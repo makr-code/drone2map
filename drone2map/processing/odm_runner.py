@@ -17,7 +17,9 @@ class OdmRunner:
     def run_via_nodeodm(self, image_paths: list[str], output_dir: str,
                         options: Optional[dict] = None,
                         progress_callback: Optional[Callable[[float, str], None]] = None,
-                        stop_event: Optional[threading.Event] = None) -> dict[str, str]:
+                        stop_event: Optional[threading.Event] = None,
+                        max_retries: int = 3,
+                        retry_delay: float = 5.0) -> dict[str, str]:
         try:
             from pyodm import Node
         except ImportError as exc:
@@ -36,11 +38,28 @@ class OdmRunner:
         if progress_callback:
             progress_callback(2.0, f"Lade {len(image_paths)} Bilder hoch...")
         task = node.create_task(image_paths, options=opts)
+        consecutive_errors = 0
         while True:
             if stop_event is not None and stop_event.is_set():
                 task.cancel()
                 return {}
-            info = task.info()
+            try:
+                info = task.info()
+                consecutive_errors = 0
+            except Exception as exc:
+                consecutive_errors += 1
+                if consecutive_errors > max_retries:
+                    raise RuntimeError(
+                        f"NodeODM-Verbindung nach {max_retries} Versuchen verloren: {exc}"
+                    ) from exc
+                logger.warning(
+                    "Abruf-Fehler (%d/%d): %s – warte %.0fs",
+                    consecutive_errors, max_retries, exc, retry_delay,
+                )
+                if progress_callback:
+                    progress_callback(-1.0, f"Verbindungsfehler – Wiederholungsversuch {consecutive_errors}/{max_retries}…")
+                time.sleep(retry_delay)
+                continue
             pct = info.progress or 0.0
             status = info.status.name if info.status else "UNBEKANNT"
             if progress_callback:

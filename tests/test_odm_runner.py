@@ -161,3 +161,116 @@ class TestRunViaCli:
             runner.run_via_cli(str(tmp_path), str(tmp_path))
         assert "--dsm" in captured_cmd
         assert "--dtm" in captured_cmd
+
+
+class TestRunViaNodeodmRetry:
+    """Tests für die Wiederholungslogik in run_via_nodeodm."""
+
+    def _make_mock_pyodm(self, info_side_effects, tmp_path):
+        """Erstellt ein Mock-pyodm-Modul mit vordefinierten info()-Antworten."""
+        mock_info_completed = MagicMock()
+        mock_info_completed.progress = 100.0
+        mock_info_completed.status.name = "COMPLETED"
+
+        mock_task = MagicMock()
+        mock_task.info.side_effect = info_side_effects
+        mock_task.download_assets.return_value = None
+
+        mock_node = MagicMock()
+        mock_node.info.return_value = MagicMock(version="1.0")
+        mock_node.create_task.return_value = mock_task
+
+        mock_pyodm = MagicMock()
+        mock_pyodm.Node.return_value = mock_node
+        return mock_pyodm, mock_task
+
+    def test_retries_transient_error_and_succeeds(self, tmp_path):
+        """Nach einem transienten Fehler soll ein Retry erfolgen und danach Erfolg."""
+        completed_info = MagicMock()
+        completed_info.progress = 100.0
+        completed_info.status.name = "COMPLETED"
+
+        call_count = 0
+        def info_side_effect():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("kurzer Ausfall")
+            return completed_info
+
+        mock_pyodm, mock_task = self._make_mock_pyodm(info_side_effect, tmp_path)
+        runner = OdmRunner()
+        (tmp_path / "orthophoto.tif").write_bytes(b"")
+        with patch.dict("sys.modules", {"pyodm": mock_pyodm}):
+            with patch("time.sleep"):
+                results = runner.run_via_nodeodm(
+                    [str(tmp_path / "orthophoto.tif")],
+                    str(tmp_path),
+                    max_retries=3,
+                    retry_delay=0.0,
+                )
+        assert call_count == 2
+        assert isinstance(results, dict)
+
+    def test_raises_after_max_retries_exceeded(self, tmp_path):
+        """Nach Überschreiten von max_retries soll RuntimeError ausgelöst werden."""
+        def always_fail():
+            raise ConnectionError("dauerhafter Ausfall")
+
+        mock_pyodm, mock_task = self._make_mock_pyodm(always_fail, tmp_path)
+        runner = OdmRunner()
+        with patch.dict("sys.modules", {"pyodm": mock_pyodm}):
+            with patch("time.sleep"):
+                with pytest.raises(RuntimeError, match="Verbindung nach 2 Versuchen verloren"):
+                    runner.run_via_nodeodm(
+                        [str(tmp_path / "img.jpg")],
+                        str(tmp_path),
+                        max_retries=2,
+                        retry_delay=0.0,
+                    )
+
+    def test_retry_callback_message_sent(self, tmp_path):
+        """Bei einem Retry soll eine entsprechende Nachricht an den Callback gesendet werden."""
+        completed_info = MagicMock()
+        completed_info.progress = 100.0
+        completed_info.status.name = "COMPLETED"
+
+        call_count = 0
+        def info_side_effect():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("blip")
+            return completed_info
+
+        mock_pyodm, _ = self._make_mock_pyodm(info_side_effect, tmp_path)
+        runner = OdmRunner()
+        (tmp_path / "orthophoto.tif").write_bytes(b"")
+        messages = []
+        with patch.dict("sys.modules", {"pyodm": mock_pyodm}):
+            with patch("time.sleep"):
+                runner.run_via_nodeodm(
+                    [str(tmp_path / "orthophoto.tif")],
+                    str(tmp_path),
+                    max_retries=3,
+                    retry_delay=0.0,
+                    progress_callback=lambda _p, m: messages.append(m),
+                )
+        assert any("Wiederholungsversuch" in m for m in messages)
+
+    def test_no_retry_on_completed_status(self, tmp_path):
+        """COMPLETED-Status soll beim ersten info()-Aufruf sofort abschließen."""
+        completed_info = MagicMock()
+        completed_info.progress = 100.0
+        completed_info.status.name = "COMPLETED"
+
+        mock_pyodm, mock_task = self._make_mock_pyodm([completed_info], tmp_path)
+        runner = OdmRunner()
+        (tmp_path / "orthophoto.tif").write_bytes(b"")
+        with patch.dict("sys.modules", {"pyodm": mock_pyodm}):
+            with patch("time.sleep"):
+                runner.run_via_nodeodm(
+                    [str(tmp_path / "orthophoto.tif")],
+                    str(tmp_path),
+                )
+        assert mock_task.info.call_count == 1

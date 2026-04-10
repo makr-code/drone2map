@@ -332,7 +332,19 @@ class App:
     def _on_processing_error(self, msg: str) -> None:
         self._progress.set_running(False)
         self._status(f"Fehler: {msg}")
-        messagebox.showerror("Verarbeitungsfehler", msg)
+        if messagebox.askyesno("Verarbeitungsfehler", f"{msg}\n\nErneut versuchen?"):
+            self._retry_processing()
+        else:
+            messagebox.showerror("Verarbeitungsfehler", msg)
+
+    def _retry_processing(self) -> None:
+        """Startet die Pipeline nach einem Fehler erneut."""
+        if self._pipeline is None or self._project is None:
+            return
+        self._progress.clear_log()
+        self._progress.set_running(True)
+        self._pipeline.retry()
+        self._root.after(50, self._poll_queue)
 
     def _about(self) -> None:
         from .. import __version__

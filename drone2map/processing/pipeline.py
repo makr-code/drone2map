@@ -81,6 +81,16 @@ class Pipeline:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    def retry(self) -> None:
+        """Startet die Pipeline nach einem Fehler erneut.
+
+        Wenn der vorherige Hintergrund-Thread noch aktiv ist (z. B. beim
+        kooperativen Stop-Vorgang), kehrt diese Methode ohne Wirkung zurück.
+        """
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self.run_async()
+
     def stop(self) -> None:
         """Fordert den Hintergrund-Thread auf, kooperativ zu stoppen."""
         self._stop_event.set()

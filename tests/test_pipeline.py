@@ -217,6 +217,37 @@ class TestPipelineEvents:
         assert len(meta_events) == 1
         assert len(meta_events[0].metadata) == 3
 
+    def test_retry_settings_passed_to_nodeodm(self, tmp_path):
+        """Pipeline übergibt max_retries und retry_delay aus ProjectSettings an OdmRunner."""
+        from drone2map.core.project import ProjectSettings
+        proj = _make_project(tmp_path, image_count=3)
+        proj.settings.max_retries = 7
+        proj.settings.retry_delay = 15.0
+        pipeline = Pipeline(proj)
+        fake_results = {"orthophoto": "/out/orthophoto.tif"}
+
+        with patch("drone2map.processing.pipeline.ImageValidator") as MockVal, \
+             patch("drone2map.processing.pipeline.ExifParser") as MockParser, \
+             patch("drone2map.processing.pipeline.OdmRunner") as MockRunner, \
+             patch("drone2map.processing.pipeline.Exporter") as MockExp:
+
+            MockVal.return_value.validate_batch.return_value = [
+                MagicMock(valid=True, file_path=p) for p in proj.image_paths
+            ]
+            MockParser.return_value.parse_file.return_value = MagicMock(
+                latitude=52.0, longitude=13.0)
+            MockRunner.return_value.is_nodeodm_available.return_value = True
+            MockRunner.return_value.run_via_nodeodm.return_value = fake_results
+            MockExp.return_value.export_all.return_value = fake_results
+            MockExp.return_value.create_export_report.return_value = "/out/report.txt"
+
+            pipeline.run_async()
+            _drain_queue(pipeline, timeout=3.0)
+
+        call_kwargs = MockRunner.return_value.run_via_nodeodm.call_args
+        assert call_kwargs.kwargs.get("max_retries") == 7
+        assert call_kwargs.kwargs.get("retry_delay") == 15.0
+
 
 class TestStageImages:
     def test_single_directory_returned_directly(self, tmp_path):

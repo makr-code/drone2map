@@ -19,6 +19,8 @@ class ProjectSettings:
     mesh_octree_depth: int = 12
     node_host: str = "localhost"
     node_port: int = 3000
+    max_retries: int = 3
+    retry_delay: float = 5.0
 
 @dataclass
 class Project:

@@ -152,6 +152,8 @@ class Pipeline:
                     options=opts,
                     progress_callback=odm_prog,
                     stop_event=self._stop_event,
+                    max_retries=s.max_retries,
+                    retry_delay=s.retry_delay,
                 )
             else:
                 logger.info("NodeODM nicht erreichbar – verwende ODM-CLI")

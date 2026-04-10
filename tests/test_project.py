@@ -68,3 +68,58 @@ def test_save_raises_without_path():
     p = Project(name="Test")
     with pytest.raises(ValueError):
         p.save()
+
+
+class TestProjectSettingsRetry:
+    def test_default_max_retries(self):
+        s = ProjectSettings()
+        assert s.max_retries == 3
+
+    def test_default_retry_delay(self):
+        s = ProjectSettings()
+        assert s.retry_delay == 5.0
+
+    def test_custom_max_retries(self):
+        s = ProjectSettings(max_retries=10)
+        assert s.max_retries == 10
+
+    def test_custom_retry_delay(self):
+        s = ProjectSettings(retry_delay=30.0)
+        assert s.retry_delay == 30.0
+
+    def test_save_and_load_preserves_retry_settings(self, tmp_path):
+        p = Project(name="RetryTest", output_dir=str(tmp_path))
+        p.settings.max_retries = 7
+        p.settings.retry_delay = 12.5
+        path = p.save(tmp_path / "retry.d2m.json")
+        loaded = Project.load(path)
+        assert loaded.settings.max_retries == 7
+        assert loaded.settings.retry_delay == 12.5
+
+    def test_load_older_project_without_retry_fields_uses_defaults(self, tmp_path):
+        """Projekte ohne retry-Felder (ältere Versionen) laden mit Standardwerten."""
+        import json
+        old_project = {
+            "name": "OldProject",
+            "output_dir": str(tmp_path),
+            "image_paths": [],
+            "settings": {
+                "dsm": True,
+                "dtm": False,
+                "orthophoto_resolution": 5.0,
+                "feature_quality": "medium",
+                "pc_quality": "medium",
+                "mesh_octree_depth": 10,
+                "node_host": "localhost",
+                "node_port": 3000,
+            },
+            "status": "neu",
+            "result_paths": {},
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
+        }
+        p_file = tmp_path / "old.d2m.json"
+        p_file.write_text(json.dumps(old_project), encoding="utf-8")
+        loaded = Project.load(p_file)
+        assert loaded.settings.max_retries == 3
+        assert loaded.settings.retry_delay == 5.0

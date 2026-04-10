@@ -57,12 +57,15 @@ class SettingsDialog(tk.Toplevel):
         nb.add(tab_node, text="NodeODM")
         self._add_str_field(tab_node, 0, "Host", "node_host", ps.node_host)
         self._add_int_field(tab_node, 1, "Port", "node_port", ps.node_port)
+        self._add_int_field(tab_node, 2, "Max. Wiederholungen", "max_retries", ps.max_retries)
+        self._add_float_field(tab_node, 3, "Wartezeit zw. Versuchen (s)", "retry_delay",
+                              ps.retry_delay)
         self._node_status_var = tk.StringVar(value="")
         ttk.Button(tab_node, text="Verbindung testen",
                    command=self._test_nodeodm_connection).grid(
-            row=2, column=0, columnspan=2, pady=(12, 4), padx=8, sticky="w")
+            row=4, column=0, columnspan=2, pady=(12, 4), padx=8, sticky="w")
         ttk.Label(tab_node, textvariable=self._node_status_var,
-                  anchor="w").grid(row=3, column=0, columnspan=3, sticky="w", padx=8)
+                  anchor="w").grid(row=5, column=0, columnspan=3, sticky="w", padx=8)
 
         # ---- Buttons ----
         btn_frame = ttk.Frame(self)
@@ -140,6 +143,8 @@ class SettingsDialog(tk.Toplevel):
                 mesh_octree_depth=int(self._vars["mesh_octree_depth"].get()),
                 node_host=str(self._vars["node_host"].get()),
                 node_port=int(self._vars["node_port"].get()),
+                max_retries=int(self._vars["max_retries"].get()),
+                retry_delay=float(self._vars["retry_delay"].get()),
             )
         except (ValueError, KeyError) as exc:
             from tkinter import messagebox

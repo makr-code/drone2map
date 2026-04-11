@@ -393,6 +393,8 @@ class App:
                 settings=ProjectSettings(
                     node_host=self._settings.odm.node_host,
                     node_port=self._settings.odm.node_port,
+                    max_retries=self._settings.odm.max_retries,
+                    retry_delay=self._settings.odm.retry_delay,
                 ),
             )
 

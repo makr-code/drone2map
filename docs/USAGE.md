@@ -26,6 +26,8 @@
 | Feature-Qualität | lowest / low / medium / high / ultra |
 | PC-Qualität | Punktwolken-Qualität |
 | NodeODM Host/Port | Adresse des NodeODM-Servers |
+| Max. Wiederholungen | Retry-Versuche bei Verbindungsabbruch (Standard: 3) |
+| Wartezeit zw. Versuchen | Pause in Sekunden zwischen Retries (Standard: 5 s) |
 
 ## Projekte
 

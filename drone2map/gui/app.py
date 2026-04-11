@@ -67,6 +67,21 @@ class App:
         except Exception as exc:
             logger.error("Projekt konnte nicht geladen werden: %s", exc)
 
+    def load_images_folder(self, folder: str) -> None:
+        """Lädt alle Bilder aus einem Ordner (z. B. via CLI --images)."""
+        from pathlib import Path as _Path
+        self._ensure_project()
+        paths = [
+            str(p) for p in _Path(folder).iterdir()
+            if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+        ]
+        if not paths:
+            logger.warning("Keine Bilder gefunden in: %s", folder)
+            return
+        added = self._project.add_images(paths)  # type: ignore[union-attr]
+        self._reload_images()
+        self._status(f"{added} Bilder aus '{folder}' geladen")
+
     def run(self) -> None:
         self._root.mainloop()
 

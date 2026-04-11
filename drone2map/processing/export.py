@@ -43,7 +43,12 @@ class Exporter:
         return str(dest)
 
     def export_all(self, result_paths: dict[str, str], reproject_epsg: Optional[str] = None) -> dict[str, str]:
-        """Exportiert alle Ergebnisdateien."""
+        """Exportiert alle Ergebnisdateien.
+
+        GeoTIFF-Dateien werden kopiert/reprojiziert.  Andere Dateiformate
+        (z. B. .laz Punktwolken) werden direkt in das Ausgabeverzeichnis kopiert.
+        """
+        _RASTER_EXTS = {".tif", ".tiff", ".geotiff"}
         exported: dict[str, str] = {}
         for key, src in result_paths.items():
             if not src or not Path(src).exists():
@@ -51,7 +56,14 @@ class Exporter:
             suffix = Path(src).suffix
             dest_name = f"{key}{suffix}"
             try:
-                exported[key] = self.export_geotiff(src, dest_name, reproject_epsg)
+                if suffix.lower() in _RASTER_EXTS:
+                    exported[key] = self.export_geotiff(src, dest_name, reproject_epsg)
+                else:
+                    self.output_dir.mkdir(parents=True, exist_ok=True)
+                    dest = self.output_dir / dest_name
+                    shutil.copy2(src, dest)
+                    exported[key] = str(dest)
+                    logger.info("Kopiert: %s -> %s", src, dest)
             except Exception as exc:
                 logger.error("Export fehlgeschlagen %s: %s", key, exc)
         return exported

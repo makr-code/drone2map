@@ -59,6 +59,36 @@ class GeoUtils:
         return min(lats), min(lons), max(lats), max(lons)
 
     @staticmethod
+    def convex_hull(lats: list[float], lons: list[float]) -> list[tuple[float, float]]:
+        """Gibt die Eckpunkte der konvexen Hülle als Liste von (lat, lon)-Tupeln zurück.
+
+        Nutzt das Jarvis-March-Algorithmus (Gift Wrapping), der ohne externe
+        Abhängigkeiten auskommt.  Bei weniger als 3 Punkten werden die
+        Eingabepunkte zurückgegeben.
+        """
+        points = list(zip(lats, lons))
+        n = len(points)
+        if n < 3:
+            return points
+
+        def cross(o, a, b):
+            return (a[1] - o[1]) * (b[0] - o[0]) - (a[0] - o[0]) * (b[1] - o[1])
+
+        start = min(range(n), key=lambda i: (points[i][1], points[i][0]))
+        hull = []
+        current = start
+        while True:
+            hull.append(points[current])
+            nxt = (current + 1) % n
+            for i in range(n):
+                if cross(points[current], points[nxt], points[i]) < 0:
+                    nxt = i
+            current = nxt
+            if current == start:
+                break
+        return hull
+
+    @staticmethod
     def calculate_gsd(altitude_m: float, focal_mm: float, sensor_w_mm: float, img_w_px: int) -> float:
         if focal_mm <= 0 or img_w_px <= 0:
             return 0.0

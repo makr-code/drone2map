@@ -25,6 +25,11 @@ def _parse_args() -> argparse.Namespace:
         metavar="FILE",
         help="Projektdatei (.d2m.json) beim Start direkt öffnen",
     )
+    parser.add_argument(
+        "--images",
+        metavar="DIR",
+        help="Ordner mit Drohnenbildern beim Start direkt laden",
+    )
     return parser.parse_args()
 
 
@@ -48,6 +53,8 @@ def main() -> None:
         app = App(settings)
         if args.project:
             app.open_project_file(args.project)
+        if args.images:
+            app.load_images_folder(args.images)
         app.run()
     except Exception as exc:
         logger.exception("Unbehandelter Fehler: %s", exc)

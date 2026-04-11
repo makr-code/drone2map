@@ -107,6 +107,23 @@ class ExifParser:
             meta.camera_model = str(d.get("Model", ""))
             meta.datetime_original = str(d.get("DateTimeOriginal", ""))
             meta.image_width, meta.image_height = img.size
+            if "FocalLength" in d:
+                try:
+                    fl = d["FocalLength"]
+                    meta.focal_length = fl.numerator / fl.denominator
+                except (AttributeError, ZeroDivisionError):
+                    pass
+            if "ISOSpeedRatings" in d:
+                try:
+                    meta.iso = int(d["ISOSpeedRatings"])
+                except (TypeError, ValueError):
+                    pass
+            if "ExposureTime" in d:
+                try:
+                    et = d["ExposureTime"]
+                    meta.exposure_time = f"{et.numerator}/{et.denominator}"
+                except AttributeError:
+                    meta.exposure_time = str(d["ExposureTime"])
             gps = d.get("GPSInfo")
             if gps:
                 g = {GPSTAGS.get(k, k): v for k, v in gps.items()}
@@ -119,6 +136,12 @@ class ExifParser:
                     meta.gps_valid = True
                 except (KeyError, ZeroDivisionError):
                     pass
+                if "GPSAltitude" in g:
+                    try:
+                        alt = g["GPSAltitude"]
+                        meta.altitude = alt.numerator / alt.denominator
+                    except (AttributeError, ZeroDivisionError):
+                        pass
         except Exception as exc:
             logger.warning("Pillow EXIF %s: %s", path.name, exc)
 

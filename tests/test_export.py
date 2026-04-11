@@ -101,3 +101,39 @@ class TestExporter:
                 pass
         # output dir was created
         assert out_dir.exists()
+
+
+class TestExporterNonRasterFiles:
+    """Nicht-GeoTIFF-Dateien (z. B. .laz) werden direkt kopiert."""
+
+    def test_laz_file_copied_directly(self, tmp_path):
+        src = tmp_path / "cloud.laz"
+        src.write_bytes(b"LAZDATA")
+        out_dir = tmp_path / "out"
+        exp = Exporter(str(out_dir))
+        exported = exp.export_all({"pointcloud": str(src)})
+        assert "pointcloud" in exported
+        assert Path(exported["pointcloud"]).read_bytes() == b"LAZDATA"
+
+    def test_non_raster_skips_reprojection(self, tmp_path):
+        """export_geotiff darf für Nicht-Raster-Dateien NICHT aufgerufen werden."""
+        src = tmp_path / "cloud.laz"
+        src.write_bytes(b"X")
+        out_dir = tmp_path / "out"
+        exp = Exporter(str(out_dir))
+        with patch.object(exp, "export_geotiff") as mock_gt:
+            exp.export_all({"pointcloud": str(src)})
+        mock_gt.assert_not_called()
+
+    def test_mixed_raster_and_laz(self, tmp_path):
+        """GeoTIFFs werden kopiert, .laz-Dateien ebenfalls."""
+        tif_src = tmp_path / "orthophoto.tif"
+        laz_src = tmp_path / "cloud.laz"
+        tif_src.write_bytes(b"TIFF")
+        laz_src.write_bytes(b"LAZ")
+        out_dir = tmp_path / "out"
+        exp = Exporter(str(out_dir))
+        exported = exp.export_all({"orthophoto": str(tif_src), "pointcloud": str(laz_src)})
+        assert "orthophoto" in exported
+        assert "pointcloud" in exported
+        assert Path(exported["pointcloud"]).suffix == ".laz"

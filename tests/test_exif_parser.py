@@ -127,3 +127,83 @@ def test_parse_file_pillow_fallback_no_gps(tmp_path):
 
     assert meta.gps_valid is False
     assert meta.filename == "test.jpg"
+
+
+class TestPillowFallbackExtraFields:
+    """Tests für die erweiterten Felder in ExifParser._from_pillow."""
+
+    def _make_mock_pil(self, exif_dict, gps_dict=None):
+        """Erzeugt ein minimales PIL-Mock mit den angegebenen EXIF-Tags."""
+        from fractions import Fraction
+
+        make_tag_map = {
+            271: "Make", 272: "Model", 306: "DateTimeOriginal",
+            37386: "FocalLength", 34855: "ISOSpeedRatings", 33434: "ExposureTime",
+            34853: "GPSInfo",
+        }
+        gps_tag_map = {
+            1: "GPSLatitudeRef", 2: "GPSLatitude",
+            3: "GPSLongitudeRef", 4: "GPSLongitude",
+            6: "GPSAltitude",
+        }
+
+        mock_img = MagicMock()
+        mock_img.size = (4000, 3000)
+        if gps_dict is not None:
+            exif_dict[34853] = gps_dict
+        mock_img._getexif.return_value = exif_dict
+
+        mock_pil = MagicMock()
+        mock_pil.Image.open.return_value = mock_img
+        mock_pil.ExifTags.TAGS = make_tag_map
+        mock_pil.ExifTags.GPSTAGS = gps_tag_map
+        return mock_pil
+
+    def _parse_with_pillow(self, mock_pil, tmp_path):
+        import sys
+        img_file = tmp_path / "test.jpg"
+        img_file.write_bytes(b"\xff\xd8\xff")
+        with patch.dict(sys.modules, {"exifread": None}):
+            with patch.dict(sys.modules, {"PIL": mock_pil, "PIL.Image": mock_pil.Image,
+                                           "PIL.ExifTags": mock_pil.ExifTags}):
+                parser = ExifParser()
+                return parser.parse_file(img_file)
+
+    def test_focal_length_extracted(self, tmp_path):
+        from fractions import Fraction
+        fl = MagicMock()
+        fl.numerator = 240
+        fl.denominator = 10
+        mock_pil = self._make_mock_pil({271: "DJI", 272: "FC3411", 37386: fl})
+        meta = self._parse_with_pillow(mock_pil, tmp_path)
+        assert meta.focal_length == pytest.approx(24.0)
+
+    def test_iso_extracted(self, tmp_path):
+        mock_pil = self._make_mock_pil({271: "DJI", 272: "FC3411", 34855: 100})
+        meta = self._parse_with_pillow(mock_pil, tmp_path)
+        assert meta.iso == 100
+
+    def test_exposure_time_extracted(self, tmp_path):
+        et = MagicMock()
+        et.numerator = 1
+        et.denominator = 500
+        mock_pil = self._make_mock_pil({271: "DJI", 272: "FC3411", 33434: et})
+        meta = self._parse_with_pillow(mock_pil, tmp_path)
+        assert meta.exposure_time == "1/500"
+
+    def test_gps_altitude_extracted(self, tmp_path):
+        from fractions import Fraction
+        lat_rat = [MagicMock(numerator=52, denominator=1),
+                   MagicMock(numerator=0, denominator=1),
+                   MagicMock(numerator=0, denominator=1)]
+        lon_rat = [MagicMock(numerator=13, denominator=1),
+                   MagicMock(numerator=0, denominator=1),
+                   MagicMock(numerator=0, denominator=1)]
+        alt = MagicMock()
+        alt.numerator = 1200
+        alt.denominator = 10
+        gps = {1: "N", 2: lat_rat, 3: "E", 4: lon_rat, 6: alt}
+        mock_pil = self._make_mock_pil({271: "DJI"}, gps_dict=gps)
+        meta = self._parse_with_pillow(mock_pil, tmp_path)
+        assert meta.altitude == pytest.approx(120.0)
+        assert meta.gps_valid is True

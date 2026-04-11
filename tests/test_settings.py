@@ -18,26 +18,52 @@ class TestAppSettings:
         assert s.odm.node_port == 3000
         assert s.odm.node_host == "localhost"
 
-    def test_add_recent_prepends(self):
+    def test_add_recent_prepends(self, tmp_path):
+        p_a = tmp_path / "a.json"
+        p_b = tmp_path / "b.json"
+        p_a.write_text("{}")
+        p_b.write_text("{}")
         s = AppSettings()
-        s.add_recent("/path/a.json")
-        s.add_recent("/path/b.json")
-        assert s.recent_projects[0] == "/path/b.json"
-        assert s.recent_projects[1] == "/path/a.json"
+        s.add_recent(str(p_a))
+        s.add_recent(str(p_b))
+        assert s.recent_projects[0] == str(p_b)
+        assert s.recent_projects[1] == str(p_a)
 
-    def test_add_recent_deduplicates(self):
+    def test_add_recent_deduplicates(self, tmp_path):
+        p_a = tmp_path / "a.json"
+        p_b = tmp_path / "b.json"
+        p_a.write_text("{}")
+        p_b.write_text("{}")
         s = AppSettings()
-        s.add_recent("/path/a.json")
-        s.add_recent("/path/b.json")
-        s.add_recent("/path/a.json")
-        assert s.recent_projects.count("/path/a.json") == 1
-        assert s.recent_projects[0] == "/path/a.json"
+        s.add_recent(str(p_a))
+        s.add_recent(str(p_b))
+        s.add_recent(str(p_a))
+        assert s.recent_projects.count(str(p_a)) == 1
+        assert s.recent_projects[0] == str(p_a)
 
-    def test_add_recent_limits_to_10(self):
+    def test_add_recent_limits_to_10(self, tmp_path):
         s = AppSettings()
         for i in range(15):
-            s.add_recent(f"/path/{i}.json")
+            p = tmp_path / f"{i}.json"
+            p.write_text("{}")
+            s.add_recent(str(p))
         assert len(s.recent_projects) == 10
+
+    def test_add_recent_prunes_nonexistent_paths(self, tmp_path):
+        """Pfade, die nicht mehr auf der Disk existieren, werden entfernt."""
+        s = AppSettings()
+        real = tmp_path / "real.json"
+        real.write_text("{}")
+        ghost = tmp_path / "ghost.json"
+        ghost.write_text("{}")
+        s.add_recent(str(real))
+        s.add_recent(str(ghost))
+        ghost.unlink()  # simulate deleted file
+        # Adding any path triggers pruning
+        real2 = tmp_path / "real2.json"
+        real2.write_text("{}")
+        s.add_recent(str(real2))
+        assert str(ghost) not in s.recent_projects
 
     def test_save_and_load(self, tmp_path):
         cfg = tmp_path / ".drone2map" / "settings.json"

@@ -105,3 +105,37 @@ def test_utm_to_wgs84_fallback_without_pyproj():
         lat, lon = GeoUtils.utm_to_wgs84(391000.0, 5820000.0, "EPSG:32633")
     assert lat == 5820000.0
     assert lon == 391000.0
+
+
+class TestConvexHull:
+    def test_empty_returns_empty(self):
+        assert GeoUtils.convex_hull([], []) == []
+
+    def test_single_point_returned(self):
+        hull = GeoUtils.convex_hull([52.0], [13.0])
+        assert hull == [(52.0, 13.0)]
+
+    def test_two_points_returned(self):
+        hull = GeoUtils.convex_hull([52.0, 53.0], [13.0, 14.0])
+        assert len(hull) == 2
+
+    def test_square_hull_has_four_corners(self):
+        lats = [0.0, 0.0, 1.0, 1.0, 0.5]
+        lons = [0.0, 1.0, 0.0, 1.0, 0.5]
+        hull = GeoUtils.convex_hull(lats, lons)
+        # The centre point (0.5, 0.5) must NOT be on the hull
+        assert (0.5, 0.5) not in hull
+        assert len(hull) == 4
+
+    def test_collinear_points(self):
+        lats = [0.0, 1.0, 2.0]
+        lons = [0.0, 0.0, 0.0]
+        hull = GeoUtils.convex_hull(lats, lons)
+        assert len(hull) >= 2
+
+    def test_hull_points_are_subset_of_input(self):
+        lats = [52.0, 52.1, 52.2, 52.05, 52.15]
+        lons = [13.0, 13.1, 13.0, 13.05, 13.05]
+        hull = GeoUtils.convex_hull(lats, lons)
+        for pt in hull:
+            assert pt in list(zip(lats, lons))

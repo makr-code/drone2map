@@ -1,0 +1,10 @@
+ttkbootstrap>=1.10.0
+tkintermapview>=1.29
+exifread>=3.0.0
+Pillow>=10.0.0
+pyodm>=1.5.4
+pyproj>=3.6.0
+rasterio>=1.3.0
+numpy>=1.24.0
+pytest>=7.0.0
+pytest-mock>=3.11.0

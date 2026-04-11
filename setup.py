@@ -6,7 +6,8 @@ with open("README.md", encoding="utf-8") as f:
 with open("requirements.txt") as f:
     requirements = [
         l.strip() for l in f
-        if l.strip() and not l.startswith("#") and not l.startswith("pytest")
+        if l.strip() and not l.startswith("#")
+        and l.strip() not in ("pytest>=7.0.0", "pytest-mock>=3.11.0")
     ]
 
 setup(

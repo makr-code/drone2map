@@ -56,8 +56,8 @@ class AppSettings:
         if path in self.recent_projects:
             self.recent_projects.remove(path)
         self.recent_projects.insert(0, path)
-        # Keep only the 10 most-recent entries that still exist on disk
+        # Keep only paths that still exist on disk, capped at 10 entries
         self.recent_projects = [
-            p for p in self.recent_projects[:20]
+            p for p in self.recent_projects
             if Path(p).exists()
         ][:10]

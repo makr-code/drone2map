@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import tkinter as tk
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
@@ -71,6 +73,7 @@ class App:
         """Lädt alle Bilder aus einem Ordner (z. B. via CLI --images)."""
         from pathlib import Path as _Path
         self._ensure_project()
+        assert self._project is not None
         paths = [
             str(p) for p in _Path(folder).iterdir()
             if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
@@ -78,7 +81,7 @@ class App:
         if not paths:
             logger.warning("Keine Bilder gefunden in: %s", folder)
             return
-        added = self._project.add_images(paths)  # type: ignore[union-attr]
+        added = self._project.add_images(paths)
         self._reload_images()
         self._status(f"{added} Bilder aus '{folder}' geladen")
 
@@ -224,18 +227,30 @@ class App:
         if not paths:
             return
         self._ensure_project()
-        added = self._project.add_images(list(paths))  # type: ignore[union-attr]
+        assert self._project is not None
+        added = self._project.add_images(list(paths))
         self._reload_images()
-        self._status(f"{added} Bilder hinzugefügt ({self._project.image_count} gesamt)")  # type: ignore[union-attr]
+        self._status(f"{added} Bilder hinzugefügt ({self._project.image_count} gesamt)")
 
     def _add_folder(self) -> None:
         folder = filedialog.askdirectory(title="Ordner mit Bildern wählen")
         if not folder:
             return
         self._ensure_project()
-        paths = [str(p) for p in Path(folder).iterdir()
-                 if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
-        added = self._project.add_images(paths)  # type: ignore[union-attr]
+        assert self._project is not None
+        recursive = messagebox.askyesno(
+            "Rekursiv suchen?",
+            "Auch alle Unterordner nach Bildern durchsuchen?",
+            parent=self._root,
+        )
+        root_path = Path(folder)
+        if recursive:
+            paths = [str(p) for p in root_path.rglob("*")
+                     if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
+        else:
+            paths = [str(p) for p in root_path.iterdir()
+                     if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
+        added = self._project.add_images(paths)
         self._reload_images()
         self._status(f"{added} Bilder aus Ordner hinzugefügt")
 
@@ -275,7 +290,12 @@ class App:
     def _reload_images(self) -> None:
         if self._project is None:
             return
-        self._metadata = [self._exif_parser.parse_file(p) for p in self._project.image_paths]
+        paths = self._project.image_paths
+        if paths:
+            with ThreadPoolExecutor(max_workers=min(os.cpu_count() or 1, len(paths))) as executor:
+                self._metadata = list(executor.map(self._exif_parser.parse_file, paths))
+        else:
+            self._metadata = []
         self._image_list.set_images(self._metadata)
         self._map_view.set_images(self._metadata)
 
@@ -288,11 +308,12 @@ class App:
     def _open_settings(self) -> None:
         if self._project is None:
             self._ensure_project()
+        assert self._project is not None
         dlg = SettingsDialog(self._root,
-                             project_settings=self._project.settings,  # type: ignore[union-attr]
+                             project_settings=self._project.settings,
                              app_settings=self._settings)
         if dlg.result:
-            self._project.settings = dlg.result  # type: ignore[union-attr]
+            self._project.settings = dlg.result
             self._settings.save()
 
     def _start_processing(self) -> None:
@@ -342,7 +363,8 @@ class App:
                 self._project.save()
             except Exception as exc:
                 logger.warning("Auto-Speichern fehlgeschlagen: %s", exc)
-        messagebox.showinfo("Fertig", f"Verarbeitung abgeschlossen.\nErgebnisse in:\n{self._project.output_dir}")  # type: ignore[union-attr]
+        output_dir = self._project.output_dir if self._project is not None else ""
+        messagebox.showinfo("Fertig", f"Verarbeitung abgeschlossen.\nErgebnisse in:\n{output_dir}")
 
     def _on_processing_error(self, msg: str) -> None:
         self._progress.set_running(False)

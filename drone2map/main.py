@@ -5,9 +5,10 @@ import logging
 import sys
 
 
-def _setup_logging() -> None:
+def _setup_logging(level: str = "INFO") -> None:
+    numeric = getattr(logging, level.upper(), logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=numeric,
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
@@ -30,23 +31,32 @@ def _parse_args() -> argparse.Namespace:
         metavar="DIR",
         help="Ordner mit Drohnenbildern beim Start direkt laden",
     )
+    parser.add_argument(
+        "--log-level",
+        metavar="LEVEL",
+        default=None,
+        help="Log-Level (DEBUG, INFO, WARNING, ERROR). Überschreibt Einstellungs-Datei.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    _setup_logging()
-    logger = logging.getLogger(__name__)
-    logger.info("drone2map wird gestartet…")
-
     args = _parse_args()
 
     try:
         from .config.settings import AppSettings
         settings = AppSettings.load()
     except Exception as exc:
-        logger.warning("Einstellungen nicht geladen: %s", exc)
         from .config.settings import AppSettings
         settings = AppSettings()
+        # Logging noch nicht initialisiert – nach Setup warnen
+        _setup_logging()
+        logging.getLogger(__name__).warning("Einstellungen nicht geladen: %s", exc)
+    else:
+        _setup_logging(args.log_level or settings.log_level)
+
+    logger = logging.getLogger(__name__)
+    logger.info("drone2map wird gestartet…")
 
     try:
         from .gui.app import App

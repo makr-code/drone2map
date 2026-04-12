@@ -96,3 +96,28 @@ def test_validate_batch_returns_all(tmp_path):
     v = ImageValidator(require_gps=False)
     results = v.validate_batch(files)
     assert len(results) == 2
+
+
+def test_validate_batch_preserves_order(tmp_path):
+    """validate_batch soll die Reihenfolge der Eingabepfade erhalten."""
+    files = []
+    for i in range(10):
+        f = tmp_path / f"img_{i:02d}.jpg"
+        f.write_bytes(b"\xff\xd8\xff")
+        files.append(str(f))
+    v = ImageValidator(require_gps=False)
+    results = v.validate_batch(files)
+    for i, r in enumerate(results):
+        assert r.file_path == files[i]
+
+
+def test_validate_batch_parallel_large(tmp_path):
+    """Parallele Validierung mit vielen Dateien darf keinen Fehler werfen."""
+    files = []
+    for i in range(20):
+        f = tmp_path / f"img_{i}.jpg"
+        f.write_bytes(b"\xff\xd8\xff")
+        files.append(str(f))
+    v = ImageValidator(require_gps=False)
+    results = v.validate_batch(files)
+    assert len(results) == 20

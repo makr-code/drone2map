@@ -99,7 +99,7 @@ class ExifParser:
             from PIL import Image
             from PIL.ExifTags import TAGS, GPSTAGS
             img = Image.open(path)
-            raw = img._getexif()
+            raw = img.getexif()
             if not raw:
                 return
             d = {TAGS.get(k, k): v for k, v in raw.items()}

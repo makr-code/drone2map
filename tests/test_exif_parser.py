@@ -151,7 +151,7 @@ class TestPillowFallbackExtraFields:
         mock_img.size = (4000, 3000)
         if gps_dict is not None:
             exif_dict[34853] = gps_dict
-        mock_img._getexif.return_value = exif_dict
+        mock_img.getexif.return_value = exif_dict
 
         mock_pil = MagicMock()
         mock_pil.Image.open.return_value = mock_img

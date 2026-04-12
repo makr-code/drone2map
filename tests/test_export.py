@@ -66,6 +66,34 @@ class TestExporter:
         assert "MeinProjekt" in text
         assert "orthophoto" in text
 
+    def test_create_export_report_also_writes_json(self, tmp_path):
+        """create_export_report soll zusätzlich export_report.json schreiben."""
+        import json as _json
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+        result_file = out_dir / "orthophoto.tif"
+        result_file.write_bytes(b"X" * 512)
+        exp = Exporter(str(out_dir))
+        exp.create_export_report({"orthophoto": str(result_file)}, "JsonProjekt")
+        json_path = out_dir / "export_report.json"
+        assert json_path.exists()
+        data = _json.loads(json_path.read_text(encoding="utf-8"))
+        assert data["project"] == "JsonProjekt"
+        assert "orthophoto" in data["results"]
+        assert "exported_at" in data
+
+    def test_create_export_report_json_has_size_mb(self, tmp_path):
+        """size_mb in JSON-Bericht ist korrekt befüllt."""
+        import json as _json
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+        result_file = out_dir / "dsm.tif"
+        result_file.write_bytes(b"D" * 1024 * 1024)  # 1 MB
+        exp = Exporter(str(out_dir))
+        exp.create_export_report({"dsm": str(result_file)}, "SizeProjekt")
+        data = _json.loads((out_dir / "export_report.json").read_text(encoding="utf-8"))
+        assert data["results"]["dsm"]["size_mb"] == pytest.approx(1.0, abs=0.01)
+
     def test_export_geotiff_with_rasterio_reprojects(self, tmp_path):
         src = tmp_path / "src.tif"
         src.write_bytes(b"FAKE")

@@ -163,3 +163,25 @@ class TestOdmDefaults:
         # existing fields still loaded correctly
         assert loaded.odm.node_host == "remotehost"
         assert loaded.odm.node_port == 3001
+
+    def test_default_log_level(self):
+        s = AppSettings()
+        assert s.log_level == "INFO"
+
+    def test_save_and_load_preserves_log_level(self, tmp_path):
+        cfg = tmp_path / "settings.json"
+        s = AppSettings()
+        s.log_level = "DEBUG"
+        with patch("drone2map.config.settings._CFG", cfg):
+            s.save()
+            loaded = AppSettings.load()
+        assert loaded.log_level == "DEBUG"
+
+    def test_load_older_settings_without_log_level_uses_default(self, tmp_path):
+        """Ältere settings.json ohne log_level laden mit Standardwert INFO."""
+        cfg = tmp_path / "settings.json"
+        old_data = {"theme": "solar", "output_dir": str(tmp_path)}
+        cfg.write_text(json.dumps(old_data), encoding="utf-8")
+        with patch("drone2map.config.settings._CFG", cfg):
+            loaded = AppSettings.load()
+        assert loaded.log_level == "INFO"

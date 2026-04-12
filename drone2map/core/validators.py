@@ -1,6 +1,8 @@
 """Bildvalidierung."""
 from __future__ import annotations
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -52,7 +54,11 @@ class ImageValidator:
         return r
 
     def validate_batch(self, paths: list[str | Path]) -> list[ValidationResult]:
-        return [self.validate_file(p) for p in paths]
+        if not paths:
+            return []
+        max_workers = min(os.cpu_count() or 1, len(paths))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            return list(executor.map(self.validate_file, paths))
 
     def validate_folder(self, folder: str | Path) -> list[ValidationResult]:
         folder = Path(folder)

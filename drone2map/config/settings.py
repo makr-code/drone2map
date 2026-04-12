@@ -28,6 +28,7 @@ class AppSettings:
     last_project: Optional[str] = None
     recent_projects: list[str] = field(default_factory=list)
     output_dir: str = str(Path.home() / "drone2map_output")
+    log_level: str = "INFO"
     odm: OdmDefaults = field(default_factory=OdmDefaults)
 
     @classmethod

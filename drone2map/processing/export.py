@@ -1,7 +1,9 @@
 """Export-Funktionen: Ergebnisse kopieren, reprojizieren und in verschiedene Formate konvertieren."""
 from __future__ import annotations
+import json
 import logging
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -69,16 +71,33 @@ class Exporter:
         return exported
 
     def create_export_report(self, result_paths: dict[str, str], project_name: str) -> str:
-        """Erstellt eine einfache Textzusammenfassung der Ergebnisse."""
+        """Erstellt eine Textzusammenfassung und einen JSON-Bericht der Ergebnisse."""
+        entries: dict[str, dict] = {}
         lines = [f"drone2map Exportbericht: {project_name}", "=" * 40]
         for key, path in result_paths.items():
-            size = ""
+            size_mb: Optional[float] = None
             p = Path(path)
             if p.exists():
-                size = f" ({p.stat().st_size / 1_048_576:.1f} MB)"
-            lines.append(f"  {key}: {path}{size}")
+                size_mb = p.stat().st_size / 1_048_576
+                lines.append(f"  {key}: {path} ({size_mb:.1f} MB)")
+            else:
+                lines.append(f"  {key}: {path}")
+            entries[key] = {"path": path, "size_mb": round(size_mb, 2) if size_mb is not None else None}
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
         report = "\n".join(lines)
         report_path = self.output_dir / "export_report.txt"
-        self.output_dir.mkdir(parents=True, exist_ok=True)
         report_path.write_text(report, encoding="utf-8")
+
+        json_report = {
+            "project": project_name,
+            "exported_at": datetime.now().isoformat(),
+            "results": entries,
+        }
+        json_path = self.output_dir / "export_report.json"
+        json_path.write_text(
+            json.dumps(json_report, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info("Exportbericht geschrieben: %s", report_path)
         return str(report_path)

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "drone2map"
+version = "0.1.0"
+description = "Drohnenbilder zu Orthofoto, DSM und DGM verarbeiten"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "makr-code" }]
+dependencies = [
+    "ttkbootstrap>=1.10.0",
+    "tkintermapview>=1.29",
+    "exifread>=3.0.0",
+    "Pillow>=10.0.0",
+    "pyodm>=1.5.4",
+    "pyproj>=3.6.0",
+    "rasterio>=1.3.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0.0", "pytest-mock>=3.11.0", "ruff>=0.4.0", "mypy>=1.10.0"]
+
+[project.scripts]
+drone2map = "drone2map.main:main"
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
